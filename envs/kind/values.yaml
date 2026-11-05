@@ -1,0 +1,8 @@
+api:
+  image:
+    repository: ghcr.io/saicharan519/linkforge-api
+    tag: "sha-0000000" # ci:api-tag
+frontend:
+  image:
+    repository: ghcr.io/saicharan519/linkforge-frontend
+    tag: "sha-0000000" # ci:frontend-tag
