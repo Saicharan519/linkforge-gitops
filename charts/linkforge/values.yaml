@@ -13,6 +13,15 @@ api:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: 500m, memory: 384Mi}
 
+# The click worker: same image as the API (it follows api.image.tag), different command.
+worker:
+  # Switch off to deploy the chart BEFORE the image that contains the worker exists (see
+  # docs/RUNBOOK-p3-chart.md in the linkforge repo: the chart goes first, the worker is enabled last).
+  enabled: true
+  resources: # ARCHITECTURE §9.3: 100m / 128Mi request; it idles at about 60Mi
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+
 frontend:
   image:
     repository: ghcr.io/saicharan519/linkforge-frontend

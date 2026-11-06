@@ -1,0 +1,97 @@
+{{- if .Values.worker.enabled }}
+# The click worker (ARCHITECTURE §2.3): reads click events that the API put on the Redis stream and
+# stores them in Postgres. It is the SAME IMAGE as the API with a different command, so it always
+# runs the version that CI just built (it follows `api.image.tag`).
+#
+# No Ingress and no ClusterIP traffic: nothing connects to the worker. Its only port is the
+# metrics port, and that one belongs to the "worker" Service below (cluster-internal, scraped by
+# Prometheus in P7), never to an Ingress.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    # With the API (wave 1): after Postgres, Redis and the migration are done.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  # ONE worker is plenty for this project. More would still be correct (a consumer group hands
+  # every message to exactly one consumer, and storing is idempotent), but there is nothing to gain.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # During an update the new worker starts before the old one stops: two workers overlap for a
+      # few seconds. That is safe by design (consumer group + the unique event_id).
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: worker
+      annotations:
+        # Same reason as on the API: a changed setting rolls the pod.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      automountServiceAccountToken: false
+      # On SIGTERM the worker finishes and acknowledges its current batch, then exits (a few
+      # seconds). 30 s is Kubernetes' default, stated so nobody has to wonder.
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        {{- include "linkforge.podSecurity" 10001 | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ .Values.api.image.repository }}:{{ required "api.image.tag is required" .Values.api.image.tag }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["python", "-m", "app.worker"]
+          ports:
+            - name: metrics
+              containerPort: 9100 # the worker's metrics port (ARCHITECTURE §1.2)
+          envFrom:
+            - configMapRef:
+                name: linkforge-config
+          env:
+            {{- include "linkforge.databaseUrlEnv" . | nindent 12 }}
+            {{- include "linkforge.ipHashSecretEnv" . | nindent 12 }}
+          securityContext:
+            {{- include "linkforge.containerSecurity" . | nindent 12 }}
+          # The image's own HEALTHCHECK probes the API's port 8000, which the worker does not
+          # serve; Kubernetes ignores HEALTHCHECK anyway. The worker has no HTTP API, so no
+          # readiness probe (it receives no traffic). Liveness asks the metrics endpoint: it proves
+          # the process is up and its metrics thread answers. (A deadlocked event loop would not be
+          # noticed by this; the click_stream_lag alert, P7, is what catches a stuck worker.)
+          livenessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+---
+# Gives Prometheus a stable name for the worker's metrics port (named "metrics", as the
+# architecture requires). A Service is cluster-internal: it is NOT reachable from outside.
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: worker
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  type: ClusterIP
+  selector:
+    app: worker
+  ports:
+    - name: metrics
+      port: 9100
+      targetPort: metrics
+{{- end }}

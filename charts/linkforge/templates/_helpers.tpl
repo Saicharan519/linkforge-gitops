@@ -27,6 +27,16 @@ capabilities:
   drop: ["ALL"]
 {{- end }}
 
+{{/* IP_HASH_SECRET comes from the same Secret (key IP_HASH_SECRET): it keys the HMAC that replaces
+every client IP before a click is stored. Created by hand next to DATABASE_URL, never in git. */}}
+{{- define "linkforge.ipHashSecretEnv" -}}
+- name: IP_HASH_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.secrets.existingSecret }}
+      key: IP_HASH_SECRET
+{{- end }}
+
 {{/* DATABASE_URL always comes from the existing Secret, never from values. */}}
 {{- define "linkforge.databaseUrlEnv" -}}
 - name: DATABASE_URL

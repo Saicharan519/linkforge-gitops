@@ -39,11 +39,14 @@ spec:
           ports:
             - name: http
               containerPort: 8000
+            - name: metrics
+              containerPort: 9101 # Prometheus; its own port, never routed by an Ingress (ARCH §1.2)
           envFrom:
             - configMapRef:
                 name: linkforge-config
           env:
             {{- include "linkforge.databaseUrlEnv" . | nindent 12 }}
+            {{- include "linkforge.ipHashSecretEnv" . | nindent 12 }}
           securityContext:
             {{- include "linkforge.containerSecurity" . | nindent 12 }}
           # /healthz = process alive (liveness); /readyz = can serve, checks Postgres (readiness).
@@ -80,3 +83,7 @@ spec:
     - name: http
       port: 8000
       targetPort: http
+    # Cluster-internal only. Ingresses name the port "http" explicitly and never this one.
+    - name: metrics
+      port: 9101
+      targetPort: metrics
