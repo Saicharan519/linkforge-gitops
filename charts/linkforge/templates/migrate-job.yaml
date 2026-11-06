@@ -38,6 +38,11 @@ spec:
                 name: linkforge-config
           env:
             {{- include "linkforge.databaseUrlEnv" . | nindent 12 }}
+            # Alembic loads the application's Settings (alembic/env.py), and Settings REQUIRES
+            # IP_HASH_SECRET, so the migration cannot start without it even though it never
+            # hashes an address. (Without this line the first deploy of the click-event image
+            # failed right here: "ip_hash_secret Field required".)
+            {{- include "linkforge.ipHashSecretEnv" . | nindent 12 }}
           securityContext:
             {{- include "linkforge.containerSecurity" . | nindent 12 }}
           resources:
