@@ -18,7 +18,7 @@ frontend:
 # `app.worker` module, so a worker started from it would crash-loop. The runbook flips this to
 # true (a one-line commit) after the new image is running.
 worker:
-  enabled: false
+  enabled: true
 
 postgres:
   enabled: true # a database inside the cluster (EKS uses RDS instead)
