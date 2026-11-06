@@ -1,0 +1,51 @@
+# The ONE Argo CD "Application" for the walking skeleton (P1S.5). It tells Argo CD:
+#   "make the cluster match what this git repo says, and keep it that way."
+# You apply THIS file by hand once (kubectl apply -f). From then on, every change to the chart or
+# the values in git is deployed by Argo CD itself; nobody runs helm or kubectl for deploys.
+#
+# Later (P7) this becomes a child of an "app of apps" root Application with the other pieces
+# (sealed-secrets, monitoring); ARCHITECTURE §11 describes the order.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: linkforge
+  namespace: argocd # Application objects live in Argo CD's own namespace
+  finalizers:
+    # Deleting this Application also deletes the objects it deployed (cascade). Without the
+    # finalizer they would be orphaned and keep running. (The database volume and the hand-made
+    # Secret are not tracked by Argo, so they survive.)
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default # Argo's permission scope; "default" allows any repo/namespace, fine for one app
+
+  # WHERE the desired state lives. The repo is public (it contains no secrets), so Argo needs no
+  # credentials to read it.
+  source:
+    repoURL: https://github.com/Saicharan519/linkforge-gitops.git
+    targetRevision: main # follow the main branch: a push to main IS a deploy
+    path: charts/linkforge
+    helm:
+      valueFiles:
+        # Relative to `path` above. This file is what CI edits (the image tags).
+        - ../../envs/kind/values.yaml
+
+  # WHERE to deploy it: this very cluster (the API server Argo runs inside), namespace "linkforge".
+  # That namespace and the linkforge-db Secret already exist (created by hand, docs/RUNBOOK-k8s-raw.md §2).
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: linkforge
+
+  syncPolicy:
+    automated:
+      # prune: something REMOVED from git is also removed from the cluster.
+      prune: true
+      # selfHeal: a manual change in the cluster (kubectl scale, kubectl edit) is reverted to
+      # what git says. Git is the only way to change the system.
+      selfHeal: true
+    retry:
+      # If a sync fails (for example the migration hook), try again a few times with a growing delay.
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
