@@ -18,10 +18,11 @@ postgres:
   enabled: true # a database inside the cluster (EKS uses RDS instead)
 
 config:
-  # "dev" keeps the temporary dev user (D37): there is no login until P2. The app refuses that
-  # user when ENV=prod, so this is acceptable ONLY because this cluster is local.
-  ENV: dev
+  ENV: dev # local cluster; there is no placeholder user any more, login is real (P2.6)
   SHORT_URL_BASE: http://go.localtest.me
+  TRUSTED_PROXY_COUNT: "1" # exactly one proxy in front of the API: Traefik
+  ALLOWED_ORIGINS: http://app.localtest.me # the page that will call the API (the app host)
+  COOKIE_SECURE: "false" # kind is plain HTTP; a Secure cookie would never be sent back
 
 ingress:
   className: traefik

@@ -38,11 +38,32 @@ postgres:
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: 500m, memory: 512Mi}
 
+# Redis inside the cluster (sessions, rate limits, redirect cache, click stream). Runs on EKS too.
+redis:
+  enabled: true
+  # Tag AND digest, like our Dockerfiles. Same major version as docker-compose.yml.
+  image: redis:7.4@sha256:2e3eb11462c4e3759e6972678dd051d150ff54b1e60714b3c33b701260172a90
+  storage: 1Gi
+  resources: # ARCHITECTURE §9.3 / §5.1: the memory limit must exceed maxmemory (256mb) with room
+    requests: {cpu: 100m, memory: 256Mi} # for the copy-on-write fork of an AOF rewrite (D11)
+    limits: {cpu: 500m, memory: 512Mi}
+
 # Non-secret application settings; become the container environment (backend/app/config.py).
 config:
   ENV: "" # REQUIRED (dev | test | prod)
   LOG_LEVEL: INFO
   SHORT_URL_BASE: "" # REQUIRED: what short links look like, e.g. http://go.localtest.me
+  # How many reverse proxies of ours sit in front of the API: 1 = Traefik (kind) or the ALB (EKS).
+  # Too low and every visitor shares the proxy's single rate-limit bucket; too high and clients
+  # could forge their address. Hence REQUIRED, no default (core/client_ip.py in the app).
+  TRUSTED_PROXY_COUNT: "" # REQUIRED
+  # Comma-separated origins allowed to make state-changing requests with a session cookie (CSRF
+  # check), e.g. http://app.localtest.me. Empty would allow nothing, so it is REQUIRED.
+  ALLOWED_ORIGINS: "" # REQUIRED
+  # Secure cookies need HTTPS. Default on; an environment without TLS (kind) must say so.
+  COOKIE_SECURE: "true"
+  # Only when redis.enabled=false (an external Redis): its URL. Ignored otherwise.
+  REDIS_URL: ""
 
 # The Secret holding DATABASE_URL (and POSTGRES_PASSWORD when postgres.enabled). The chart does
 # NOT create it: kind = created by hand (docs/RUNBOOK-k8s-raw.md §2), later a SealedSecret.

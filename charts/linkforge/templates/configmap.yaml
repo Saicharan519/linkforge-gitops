@@ -14,3 +14,15 @@ data:
   ENV: {{ required "config.ENV is required (dev|test|prod)" .Values.config.ENV | quote }}
   LOG_LEVEL: {{ .Values.config.LOG_LEVEL | quote }}
   SHORT_URL_BASE: {{ required "config.SHORT_URL_BASE is required" .Values.config.SHORT_URL_BASE | quote }}
+  # The in-cluster Redis Service when we run one; otherwise the external URL must be given.
+  {{- if .Values.redis.enabled }}
+  REDIS_URL: "redis://redis:6379/0"
+  {{- else }}
+  REDIS_URL: {{ required "config.REDIS_URL is required when redis.enabled=false" .Values.config.REDIS_URL | quote }}
+  {{- end }}
+  TRUSTED_PROXY_COUNT: {{ required "config.TRUSTED_PROXY_COUNT is required (1 behind Traefik or the ALB)" .Values.config.TRUSTED_PROXY_COUNT | quote }}
+  ALLOWED_ORIGINS: {{ required "config.ALLOWED_ORIGINS is required (e.g. http://app.localtest.me)" .Values.config.ALLOWED_ORIGINS | quote }}
+  COOKIE_SECURE: {{ .Values.config.COOKIE_SECURE | quote }}
+  # The public short-link host: on it the API serves ONLY GET/HEAD /{code}, everything else is 404
+  # (host guard, D63). One source of truth: it is the same host the "go" Ingress routes.
+  PUBLIC_REDIRECT_HOST: {{ required "ingress.goHost is required" .Values.ingress.goHost | quote }}

@@ -29,8 +29,9 @@ spec:
 ---
 # The PUBLIC short-link host: only the API's http port is ever behind it (a metrics port, named
 # "metrics", must never appear in an Ingress).
-# KNOWN GAP (decision D50): "only GET/HEAD /{code} on this host" is enforced by the app via
-# PUBLIC_REDIRECT_HOST, which arrives in P2; until then every path is forwarded to the API.
+# "Only GET/HEAD /{code} on this host" is enforced by the APP, not here: the ConfigMap sets
+# PUBLIC_REDIRECT_HOST to this host and the API answers 404 to everything else on it (D63). The
+# gap logged in D50 is closed. This Ingress still forwards every path; the app decides.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

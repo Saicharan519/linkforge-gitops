@@ -1,0 +1,111 @@
+{{- if .Values.redis.enabled }}
+# Redis inside the cluster (ARCHITECTURE §5.1, §11). Unlike PostgreSQL it runs on EKS too.
+# What it holds, and why losing it is survivable: sessions (people log in again), rate-limit
+# counters (reset), the redirect cache (refills), the click stream (queued events are lost, which
+# shows up as a gap between "enqueued" and "processed"). The API keeps redirecting if Redis is down.
+#
+# Same shape as the Postgres StatefulSet next to it: a headless Service for a stable DNS name, one
+# replica, and a PersistentVolumeClaim so the append-only file (AOF) survives a pod restart.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: redis
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  clusterIP: None # headless: the pod gets a stable name; the API connects to "redis:6379"
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    # Wave -1, like Postgres: Argo waits until Redis is Ready before it starts the API (wave 1).
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  serviceName: redis
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30 # on SIGTERM Redis finishes its AOF write, then exits
+      securityContext:
+        {{- include "linkforge.podSecurity" 999 | nindent 8 }} # 999 = the "redis" user in the image
+        fsGroup: 999 # makes the mounted volume writable for a non-root Redis
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          # Settings from ARCHITECTURE §5.1, as command-line flags (no config file to mount):
+          #  appendonly yes / appendfsync everysec  persist every write, fsync once a second:
+          #                                         at most about 1 s of writes lost on a crash
+          #  maxmemory 256mb + noeviction           when full, WRITES FAIL (the API treats that
+          #                                         as a Redis error and degrades) instead of
+          #                                         silently deleting sessions or counters
+          #  auto-aof-rewrite-*                     compact the AOF when it doubles and is > 64mb
+          args:
+            - redis-server
+            - --appendonly
+            - "yes"
+            - --appendfsync
+            - everysec
+            - --maxmemory
+            - 256mb
+            - --maxmemory-policy
+            - noeviction
+            - --auto-aof-rewrite-percentage
+            - "100"
+            - --auto-aof-rewrite-min-size
+            - 64mb
+          ports:
+            - name: redis
+              containerPort: 6379
+          volumeMounts:
+            - {name: data, mountPath: /data} # the image's working directory: AOF files live here
+          securityContext:
+            {{- include "linkforge.containerSecurity" . | nindent 12 }}
+          startupProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 2
+            failureThreshold: 15
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.redis.resources | nindent 12 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.redis.storage }}
+{{- end }}

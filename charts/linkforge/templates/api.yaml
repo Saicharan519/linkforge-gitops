@@ -23,6 +23,11 @@ spec:
     metadata:
       labels:
         app: api
+      annotations:
+        # Pods read the ConfigMap only when they START, so editing it changes nothing for running
+        # pods. This annotation holds a hash of the rendered ConfigMap: change a setting in git and
+        # the pod template changes, which makes Kubernetes roll the API pods to pick it up.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
     spec:
       automountServiceAccountToken: false
       securityContext:
