@@ -1,0 +1,55 @@
+# Two hosts, two Ingresses (ARCHITECTURE §1). The class comes from values: "traefik" on kind,
+# "alb" on EKS; the routing rules themselves are identical.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ required "ingress.className is required (traefik|alb)" .Values.ingress.className }}
+  rules:
+    - host: {{ required "ingress.appHost is required" .Values.ingress.appHost }}
+      http:
+        paths:
+          - path: /api # longest prefix wins, so /api/... reaches the API
+            pathType: Prefix
+            backend:
+              service: {name: api, port: {name: http}}
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: frontend, port: {name: http}}
+---
+# The PUBLIC short-link host: only the API's http port is ever behind it (a metrics port, named
+# "metrics", must never appear in an Ingress).
+# KNOWN GAP (decision D50): "only GET/HEAD /{code} on this host" is enforced by the app via
+# PUBLIC_REDIRECT_HOST, which arrives in P2; until then every path is forwarded to the API.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: go
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ required "ingress.goHost is required" .Values.ingress.goHost }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: api, port: {name: http}}

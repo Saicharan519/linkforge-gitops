@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1" # after the migration (wave 0) has succeeded
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      app: api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # New pod first; an old pod is removed only once the new one is Ready. A bad release (wrong
+      # tag, failing readiness) therefore never takes the old pods away.
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "linkforge.podSecurity" 10001 | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ .Values.api.image.repository }}:{{ required "api.image.tag is required" .Values.api.image.tag }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: linkforge-config
+          env:
+            {{- include "linkforge.databaseUrlEnv" . | nindent 12 }}
+          securityContext:
+            {{- include "linkforge.containerSecurity" . | nindent 12 }}
+          # /healthz = process alive (liveness); /readyz = can serve, checks Postgres (readiness).
+          # Separate on purpose: a database outage must remove pods from traffic, not restart them.
+          startupProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet: {path: /healthz, port: http}
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  type: ClusterIP
+  selector:
+    app: api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

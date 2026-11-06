@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkforge-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    # Argo CD applies lower waves first and waits for them to be healthy (ARCHITECTURE §11).
+    # Plain `helm install` ignores this annotation.
+    argocd.argoproj.io/sync-wave: "-2"
+data:
+  # `required` aborts rendering with this message if the env file forgot the value.
+  ENV: {{ required "config.ENV is required (dev|test|prod)" .Values.config.ENV | quote }}
+  LOG_LEVEL: {{ .Values.config.LOG_LEVEL | quote }}
+  SHORT_URL_BASE: {{ required "config.SHORT_URL_BASE is required" .Values.config.SHORT_URL_BASE | quote }}

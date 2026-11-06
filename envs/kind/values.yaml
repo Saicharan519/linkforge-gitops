@@ -1,3 +1,10 @@
+# Values for the local kind cluster, layered on top of charts/linkforge/values.yaml.
+# Only what DIFFERS from the defaults (or must be decided per environment) is stated here.
+#
+# The two `tag:` lines are rewritten by CI (linkforge repo, .github/workflows/build-push.yml)
+# after every merge to main. It finds them by the "# ci:...-tag" markers, so do NOT remove the
+# markers or change the `tag: "..."` shape of these two lines.
+
 api:
   image:
     repository: ghcr.io/saicharan519/linkforge-api
@@ -6,3 +13,17 @@ frontend:
   image:
     repository: ghcr.io/saicharan519/linkforge-frontend
     tag: "sha-f3a5d2f" # ci:frontend-tag
+
+postgres:
+  enabled: true # a database inside the cluster (EKS uses RDS instead)
+
+config:
+  # "dev" keeps the temporary dev user (D37): there is no login until P2. The app refuses that
+  # user when ENV=prod, so this is acceptable ONLY because this cluster is local.
+  ENV: dev
+  SHORT_URL_BASE: http://go.localtest.me
+
+ingress:
+  className: traefik
+  appHost: app.localtest.me
+  goHost: go.localtest.me

@@ -1,0 +1,11 @@
+# A Helm "chart" is a folder of templates + default values that renders to plain Kubernetes YAML.
+# This one deploys all of LinkForge; the differences between environments live in the per-env
+# values files (envs/kind/values.yaml, later envs/eks/values.yaml), never in the templates.
+apiVersion: v2
+name: linkforge
+description: "LinkForge URL shortener: API, frontend, migration job and (on kind) PostgreSQL"
+type: application
+# version = the version of this CHART (bump when templates change); appVersion = informational.
+# The image versions are NOT here: CI writes them into envs/<env>/values.yaml.
+version: 0.1.0
+appVersion: "0.1.0"

@@ -1,0 +1,44 @@
+# Database migration: `alembic upgrade head`, run once per deploy (decision: ARCHITECTURE §11).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    # An Argo CD "Sync hook": the Job runs DURING the sync, at its wave (0), so after Postgres
+    # (wave -1) is Healthy and before the workloads (wave 1). NOT PreSync: PreSync runs before
+    # everything, when Postgres might not exist yet on a fresh cluster.
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "0"
+    # Delete the previous Job before creating the new one. Needed because a Job's pod template is
+    # immutable: every new image tag would otherwise fail with "field is immutable".
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 6 # failed attempts are retried: this is also what waits for a slow database
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app: migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        {{- include "linkforge.podSecurity" 10001 | nindent 8 }}
+      containers:
+        - name: migrate
+          # Same image as the API: one build, different command.
+          image: {{ .Values.api.image.repository }}:{{ required "api.image.tag is required" .Values.api.image.tag }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: linkforge-config
+          env:
+            {{- include "linkforge.databaseUrlEnv" . | nindent 12 }}
+          securityContext:
+            {{- include "linkforge.containerSecurity" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.migrate.resources | nindent 12 }}
