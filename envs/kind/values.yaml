@@ -8,11 +8,11 @@
 api:
   image:
     repository: ghcr.io/saicharan519/linkforge-api
-    tag: "sha-ebb678f" # ci:api-tag
+    tag: "sha-8c64e1e" # ci:api-tag
 frontend:
   image:
     repository: ghcr.io/saicharan519/linkforge-frontend
-    tag: "sha-ebb678f" # ci:frontend-tag
+    tag: "sha-8c64e1e" # ci:frontend-tag
 
 postgres:
   enabled: true # a database inside the cluster (EKS uses RDS instead)
