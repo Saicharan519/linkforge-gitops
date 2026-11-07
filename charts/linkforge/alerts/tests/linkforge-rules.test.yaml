@@ -143,26 +143,46 @@ tests:
         alertname: ClickStreamPendingHigh
         exp_alerts: []
 
-  - name: stream length above 80000 fires immediately
+  - name: backlog (lag + pending) above 80000 fires immediately
     interval: 1m
     input_series:
-      - series: 'click_stream_length{namespace="linkforge",pod="api-a"}'
-        values: "90000+0x10"
+      - series: 'click_stream_lag{namespace="linkforge",pod="api-a"}'
+        values: "82000+0x10"
+      - series: 'click_stream_lag{namespace="linkforge",pod="worker-a"}'
+        values: "82000+0x10"
+      - series: 'click_stream_pending{namespace="linkforge",pod="worker-a"}'
+        values: "500+0x10"
     alert_rule_test:
       - eval_time: 1m
-        alertname: ClickStreamLengthHigh
+        alertname: ClickBacklogHigh
         exp_alerts:
           - exp_labels: {severity: critical}
-            exp_annotations: {summary: "Click stream above 80000 entries, close to its 100000 cap (old clicks will be trimmed)"}
+            exp_annotations: {summary: "Click backlog (lag + pending) above 80000, close to the 100000 stream cap (unread clicks will be trimmed)"}
 
-  - name: stream length of 70000 does not fire
+  - name: a FULL stream with no backlog (length 100000, lag 0, pending 0) does NOT fire - the case D82 is about
     interval: 1m
     input_series:
       - series: 'click_stream_length{namespace="linkforge",pod="api-a"}'
-        values: "70000+0x10"
+        values: "100000+0x30"
+      - series: 'click_stream_lag{namespace="linkforge",pod="api-a"}'
+        values: "0+0x30"
+      - series: 'click_stream_pending{namespace="linkforge",pod="worker-a"}'
+        values: "0+0x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ClickBacklogHigh
+        exp_alerts: []
+
+  - name: a backlog of 70000 does not fire
+    interval: 1m
+    input_series:
+      - series: 'click_stream_lag{namespace="linkforge",pod="api-a"}'
+        values: "65000+0x10"
+      - series: 'click_stream_pending{namespace="linkforge",pod="worker-a"}'
+        values: "5000+0x10"
     alert_rule_test:
       - eval_time: 5m
-        alertname: ClickStreamLengthHigh
+        alertname: ClickBacklogHigh
         exp_alerts: []
 
   - name: a steadily growing dropped counter fires after 5 minutes

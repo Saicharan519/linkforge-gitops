@@ -260,7 +260,7 @@
       "id": 5,
       "type": "timeseries",
       "title": "Click stream: lag, pending, length",
-      "description": "max(): API and worker both export these gauges. Alerts: lag > 5000 (5 min), pending > 500 (10 min), length > 80000.",
+      "description": "max(): API and worker both export these gauges. Alerts: lag > 5000 (5 min), pending > 500 (10 min), backlog (lag + pending) > 80000. Length alone is NOT alerted: it climbs to the stream cap and stays there because acked entries are never deleted.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"

@@ -51,13 +51,16 @@ groups:
         annotations:
           summary: More than 500 click events delivered but not acknowledged for 10 minutes
 
-      - alert: ClickStreamLengthHigh
-        # No "for": the stream is capped at CLICK_STREAM_MAXLEN (default 100000); at the cap the OLDEST
-        # clicks are trimmed even if no worker has read them (ARCHITECTURE, click stream notes).
-        expr: max(click_stream_length{namespace="linkforge"}) > 80000
+      - alert: ClickBacklogHigh
+        # BACKLOG = events no worker has received (lag) + events delivered but not acknowledged (pending).
+        # Deliberately NOT click_stream_length: the worker acknowledges but never deletes entries, so the stream
+        # length climbs to its cap (CLICK_STREAM_MAXLEN, default 100000) and stays there in a healthy system
+        # (D82). What is dangerous is a backlog that close to the cap: trimming then drops the OLDEST entries even
+        # if no worker has read them. No "for": at this size every minute matters.
+        expr: max(click_stream_lag{namespace="linkforge"}) + max(click_stream_pending{namespace="linkforge"}) > 80000
         labels: {severity: critical}
         annotations:
-          summary: Click stream above 80000 entries, close to its 100000 cap (old clicks will be trimmed)
+          summary: "Click backlog (lag + pending) above 80000, close to the 100000 stream cap (unread clicks will be trimmed)"
 
       - alert: ClickEventsDropped
         expr: sum(rate(click_events_dropped_total{namespace="linkforge"}[5m])) > 0
