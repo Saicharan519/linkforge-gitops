@@ -32,7 +32,7 @@ spec:
           # Same image as the API: one build, different command.
           image: {{ .Values.api.image.repository }}:{{ required "api.image.tag is required" .Values.api.image.tag }}
           imagePullPolicy: {{ .Values.api.image.pullPolicy }}
-          command: ["alembic", "upgrade", "head"]
+          command: ["sh", "-c", "echo DRILL deliberate migration failure; exit 1"]
           envFrom:
             - configMapRef:
                 name: linkforge-config
