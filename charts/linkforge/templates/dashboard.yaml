@@ -1,0 +1,17 @@
+{{- if .Values.monitoring.dashboard.enabled }}
+# The LinkForge Grafana dashboard as a ConfigMap. Grafana's sidecar (platform/monitoring/values.yaml) watches
+# every namespace for ConfigMaps labelled grafana_dashboard=1 and loads their JSON; no Grafana restart or click
+# is needed. The JSON lives in dashboards/linkforge.json (generated once, then edited as plain JSON); it only
+# reads metrics, so the ConfigMap is harmless on a cluster without Grafana (it is just a ConfigMap).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: linkforge-dashboard
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  linkforge.json: |-
+{{ .Files.Get "dashboards/linkforge.json" | indent 4 }}
+{{- end }}

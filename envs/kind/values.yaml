@@ -39,3 +39,5 @@ ingress:
 monitoring:
   serviceMonitor:
     enabled: true
+  dashboard:
+    enabled: true

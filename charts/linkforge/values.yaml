@@ -74,7 +74,9 @@ monitoring:
   serviceMonitor:
     enabled: false
     interval: 30s
-    releaseLabel: "" # the kube-prometheus-stack release name, if its selector needs it (decided in P8)
+    releaseLabel: "" # only for a stack installed with the default selector; empty on kind (D79)
+  dashboard:
+    enabled: false # the Grafana dashboard ConfigMap (templates/dashboard.yaml); kind switches it on
 
 # Non-secret application settings; become the container environment (backend/app/config.py).
 config:
