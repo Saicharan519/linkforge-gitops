@@ -38,11 +38,10 @@ spec:
                 name: linkforge-config
           env:
             {{- include "linkforge.databaseUrlEnv" . | nindent 12 }}
-            # Alembic loads the application's Settings (alembic/env.py), and Settings REQUIRES
-            # IP_HASH_SECRET, so the migration cannot start without it even though it never
-            # hashes an address. (Without this line the first deploy of the click-event image
-            # failed right here: "ip_hash_secret Field required".)
-            {{- include "linkforge.ipHashSecretEnv" . | nindent 12 }}
+            # Only the database URL. Since D72 alembic/env.py reads just DATABASE_URL, so the Job that
+            # changes the schema is not handed the HMAC secret (least privilege). This relies on an
+            # image that contains D72 (sha-2313f37 or newer); with an older one the migration fails
+            # with "ip_hash_secret Field required".
           securityContext:
             {{- include "linkforge.containerSecurity" . | nindent 12 }}
           resources:
