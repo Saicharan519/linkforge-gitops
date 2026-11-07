@@ -19,7 +19,9 @@ metadata:
 spec:
   # ONE worker is plenty for this project. More would still be correct (a consumer group hands
   # every message to exactly one consumer, and storing is idempotent), but there is nothing to gain.
-  replicas: 1
+  # (`worker.replicas: 0` is only for the worker-down drill, P8.5: the GitOps way to stop it, since Argo CD
+  # would undo a `kubectl scale`.)
+  replicas: {{ .Values.worker.replicas }}
   selector:
     matchLabels:
       app: worker

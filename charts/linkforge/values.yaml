@@ -29,6 +29,7 @@ worker:
   # Switch off to deploy the chart BEFORE the image that contains the worker exists (see
   # docs/RUNBOOK-p3-chart.md in the linkforge repo: the chart goes first, the worker is enabled last).
   enabled: true
+  replicas: 1 # one is plenty; 0 only for the worker-down drill
   resources: # ARCHITECTURE §9.3: 100m / 128Mi request; it idles at about 60Mi
     requests: {cpu: 100m, memory: 128Mi}
     limits: {cpu: 500m, memory: 256Mi}
