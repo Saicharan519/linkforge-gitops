@@ -96,6 +96,9 @@ config:
   COOKIE_SECURE: "true"
   # Only when redis.enabled=false (an external Redis): its URL. Ignored otherwise.
   REDIS_URL: ""
+  # Load-test overrides of the app's rate limits; empty = keep the backend defaults (120/min per IP, 30/min per user).
+  RATE_LIMIT_REDIRECT_PER_MIN: ""
+  RATE_LIMIT_CREATE_PER_MIN: ""
 
 # The Secret holding DATABASE_URL (and POSTGRES_PASSWORD when postgres.enabled). The chart does
 # NOT create it: kind = created by hand (docs/RUNBOOK-k8s-raw.md §2), later a SealedSecret.
