@@ -34,3 +34,8 @@ ingress:
   className: traefik
   appHost: app.localtest.me
   goHost: go.localtest.me
+
+# Prometheus Operator CRDs come from the monitoring Application (wave -2), which is Healthy before this one starts.
+monitoring:
+  serviceMonitor:
+    enabled: true
