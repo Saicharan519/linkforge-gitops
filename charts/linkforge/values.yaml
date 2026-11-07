@@ -97,6 +97,12 @@ config:
 # NOT create it: kind = created by hand (docs/RUNBOOK-k8s-raw.md §2), later a SealedSecret.
 secrets:
   existingSecret: linkforge-db
+  # A SealedSecret that produces the Secret above (templates/sealedsecret.yaml). Off by default: a
+  # SealedSecret only works on a cluster that has the controller AND the key it was sealed with, so the
+  # environment file that turns it on also provides `encryptedData` (envs/kind/sealed.values.yaml).
+  sealed:
+    enabled: false
+    encryptedData: {}
 
 ingress:
   className: "" # REQUIRED: "traefik" on kind, "alb" on EKS
