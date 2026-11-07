@@ -1,0 +1,283 @@
+# Unit tests for ../linkforge-rules.yaml (run with ../run-tests.sh). One block per scenario: input series, then what
+# must (or must NOT) be firing at a given time. Series notation "a+bxN" = start a, add b each step, N steps (step =
+# the block's interval, 1m). Counters therefore grow by b per minute.
+rule_files:
+  - ../linkforge-rules.yaml
+evaluation_interval: 1m
+
+tests:
+  # ---- redirect p95 -------------------------------------------------------------------------------------------
+  - name: p95 above 250 ms for 5 minutes fires (all requests land in the 0.5-1 s bucket)
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/{code}",le="0.25"}'
+        values: "0+0x30"
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/{code}",le="0.5"}'
+        values: "0+0x30"
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/{code}",le="1"}'
+        values: "0+60x30"
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/{code}",le="+Inf"}'
+        values: "0+60x30"
+    alert_rule_test:
+      - eval_time: 4m # the condition has not held for 5 minutes yet
+        alertname: LinkForgeRedirectP95High
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: LinkForgeRedirectP95High
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: Redirect p95 latency above 250 ms for 5 minutes}
+
+  - name: fast redirects do not fire, and a slow OTHER route does not either
+    interval: 1m
+    input_series:
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/{code}",le="0.1"}'
+        values: "0+60x30"
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/{code}",le="0.25"}'
+        values: "0+60x30"
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/{code}",le="+Inf"}'
+        values: "0+60x30"
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/api/v1/links",le="0.25"}'
+        values: "0+0x30"
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/api/v1/links",le="1"}'
+        values: "0+60x30"
+      - series: 'http_request_duration_seconds_bucket{namespace="linkforge",route="/api/v1/links",le="+Inf"}'
+        values: "0+60x30"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: LinkForgeRedirectP95High
+        exp_alerts: []
+
+  # ---- 5xx ratio ----------------------------------------------------------------------------------------------
+  - name: 33% 5xx at 0.5 req/s fires
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{namespace="linkforge",route="/{code}",status="502"}'
+        values: "0+10x30"
+      - series: 'http_requests_total{namespace="linkforge",route="/{code}",status="200"}'
+        values: "0+20x30"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: LinkForge5xxRatioHigh
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: LinkForge5xxRatioHigh
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: More than 2% of requests fail with 5xx for 5 minutes (request rate above 0.1/s)}
+
+  - name: 25% 5xx but only 0.067 req/s (idle system) does not fire
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{namespace="linkforge",route="/{code}",status="502"}'
+        values: "0+1x30"
+      - series: 'http_requests_total{namespace="linkforge",route="/{code}",status="200"}'
+        values: "0+3x30"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: LinkForge5xxRatioHigh
+        exp_alerts: []
+
+  - name: 0.17% 5xx at busy traffic does not fire
+    interval: 1m
+    input_series:
+      - series: 'http_requests_total{namespace="linkforge",route="/{code}",status="502"}'
+        values: "0+1x30"
+      - series: 'http_requests_total{namespace="linkforge",route="/{code}",status="200"}'
+        values: "0+600x30"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: LinkForge5xxRatioHigh
+        exp_alerts: []
+
+  # ---- click stream -------------------------------------------------------------------------------------------
+  - name: lag above 5000 (from the max of API and worker gauges) fires after 5 minutes
+    interval: 1m
+    input_series:
+      - series: 'click_stream_lag{namespace="linkforge",pod="api-a"}'
+        values: "6000+0x30"
+      - series: 'click_stream_lag{namespace="linkforge",pod="worker-a"}'
+        values: "0+0x30"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: ClickStreamLagHigh
+        exp_alerts: []
+      - eval_time: 7m
+        alertname: ClickStreamLagHigh
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: More than 5000 click events not yet delivered to a worker for 5 minutes}
+
+  - name: lag of 4000 does not fire
+    interval: 1m
+    input_series:
+      - series: 'click_stream_lag{namespace="linkforge",pod="api-a"}'
+        values: "4000+0x30"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ClickStreamLagHigh
+        exp_alerts: []
+
+  - name: pending above 500 fires only after 10 minutes
+    interval: 1m
+    input_series:
+      - series: 'click_stream_pending{namespace="linkforge",pod="worker-a"}'
+        values: "600+0x30"
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: ClickStreamPendingHigh
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ClickStreamPendingHigh
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: More than 500 click events delivered but not acknowledged for 10 minutes}
+
+  - name: pending of 400 does not fire
+    interval: 1m
+    input_series:
+      - series: 'click_stream_pending{namespace="linkforge",pod="worker-a"}'
+        values: "400+0x30"
+    alert_rule_test:
+      - eval_time: 15m
+        alertname: ClickStreamPendingHigh
+        exp_alerts: []
+
+  - name: stream length above 80000 fires immediately
+    interval: 1m
+    input_series:
+      - series: 'click_stream_length{namespace="linkforge",pod="api-a"}'
+        values: "90000+0x10"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: ClickStreamLengthHigh
+        exp_alerts:
+          - exp_labels: {severity: critical}
+            exp_annotations: {summary: "Click stream above 80000 entries, close to its 100000 cap (old clicks will be trimmed)"}
+
+  - name: stream length of 70000 does not fire
+    interval: 1m
+    input_series:
+      - series: 'click_stream_length{namespace="linkforge",pod="api-a"}'
+        values: "70000+0x10"
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: ClickStreamLengthHigh
+        exp_alerts: []
+
+  - name: a steadily growing dropped counter fires after 5 minutes
+    interval: 1m
+    input_series:
+      - series: 'click_events_dropped_total{namespace="linkforge",pod="api-a"}'
+        values: "0+1x30"
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: ClickEventsDropped
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: ClickEventsDropped
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations: {summary: Click events are being dropped because Redis cannot take them (redirects still work)}
+
+  - name: a dropped counter that stays at zero does not fire
+    interval: 1m
+    input_series:
+      - series: 'click_events_dropped_total{namespace="linkforge",pod="api-a"}'
+        values: "0+0x30"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: ClickEventsDropped
+        exp_alerts: []
+
+  # ---- platform -----------------------------------------------------------------------------------------------
+  - name: Redis working set 230 MB (above the 205 MiB line, below the 512 Mi limit) fires
+    interval: 1m
+    input_series:
+      - series: 'container_memory_working_set_bytes{namespace="linkforge",pod="redis-0",container="redis"}'
+        values: "230000000+0x30"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: RedisMemoryHigh
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: RedisMemoryHigh
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: linkforge, pod: redis-0, container: redis}
+            exp_annotations: {summary: Redis working set above 205 MiB (80% of maxmemory 256 MB)}
+
+  - name: Redis working set 200 MB does not fire
+    interval: 1m
+    input_series:
+      - series: 'container_memory_working_set_bytes{namespace="linkforge",pod="redis-0",container="redis"}'
+        values: "200000000+0x30"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: RedisMemoryHigh
+        exp_alerts: []
+
+  - name: CrashLoopBackOff for 5 minutes fires, ContainerCreating does not
+    interval: 1m
+    input_series:
+      - series: 'kube_pod_container_status_waiting_reason{namespace="linkforge",pod="api-a",container="api",reason="CrashLoopBackOff"}'
+        values: "1+0x30"
+      - series: 'kube_pod_container_status_waiting_reason{namespace="linkforge",pod="api-b",container="api",reason="ContainerCreating"}'
+        values: "1+0x30"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: LinkForgePodCrashLooping
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: linkforge, pod: api-a, container: api, reason: CrashLoopBackOff}
+            exp_annotations: {summary: A LinkForge container is in CrashLoopBackOff}
+
+  - name: a target that is down for 2 minutes fires; a healthy one does not
+    interval: 1m
+    input_series:
+      - series: 'up{namespace="linkforge",job="api",instance="10.0.0.1:9101"}'
+        values: "0+0x30"
+      - series: 'up{namespace="linkforge",job="api",instance="10.0.0.2:9101"}'
+        values: "1+0x30"
+      - series: 'up{namespace="linkforge",job="worker",instance="10.0.0.3:9100"}'
+        values: "1+0x30"
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: LinkForgeTargetDown
+        exp_alerts: []
+      - eval_time: 5m
+        alertname: LinkForgeTargetDown
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: linkforge, job: api, instance: "10.0.0.1:9101"}
+            exp_annotations: {summary: Prometheus cannot scrape an api or worker pod}
+
+  - name: no api target at all fires LinkForgeApiTargetMissing (worker present)
+    interval: 1m
+    input_series:
+      - series: 'up{namespace="linkforge",job="worker",instance="10.0.0.3:9100"}'
+        values: "1+0x30"
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: LinkForgeApiTargetMissing
+        exp_alerts: []
+      - eval_time: 12m
+        alertname: LinkForgeApiTargetMissing
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: linkforge, job: api}
+            exp_annotations: {summary: Prometheus has no api target at all}
+      - eval_time: 12m
+        alertname: LinkForgeWorkerTargetMissing
+        exp_alerts: []
+
+  - name: no worker target at all fires LinkForgeWorkerTargetMissing (api present)
+    interval: 1m
+    input_series:
+      - series: 'up{namespace="linkforge",job="api",instance="10.0.0.1:9101"}'
+        values: "1+0x30"
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: LinkForgeWorkerTargetMissing
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: linkforge, job: worker}
+            exp_annotations: {summary: Prometheus has no worker target at all}
+      - eval_time: 12m
+        alertname: LinkForgeApiTargetMissing
+        exp_alerts: []

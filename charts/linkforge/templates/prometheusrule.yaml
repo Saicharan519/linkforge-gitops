@@ -1,0 +1,17 @@
+{{- if .Values.monitoring.alerts.enabled }}
+# The alert rules as a PrometheusRule object. The rules themselves are in alerts/linkforge-rules.yaml, which is
+# also what the unit tests (alerts/run-tests.sh) run, so what is tested is exactly what is deployed.
+# Like the ServiceMonitors it needs the Prometheus Operator CRDs (monitoring Application, wave -2).
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: linkforge-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.releaseLabel }}
+    release: {{ . }}
+    {{- end }}
+spec:
+{{ .Files.Get "alerts/linkforge-rules.yaml" | indent 2 }}
+{{- end }}

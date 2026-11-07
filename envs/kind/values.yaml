@@ -41,3 +41,5 @@ monitoring:
     enabled: true
   dashboard:
     enabled: true
+  alerts:
+    enabled: true

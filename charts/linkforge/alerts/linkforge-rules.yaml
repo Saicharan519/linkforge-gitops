@@ -1,0 +1,108 @@
+# Alert rules for LinkForge (ARCHITECTURE §7.1). This file is the ONE source:
+#   - charts/linkforge/templates/prometheusrule.yaml wraps it into a PrometheusRule object, and
+#   - alerts/run-tests.sh runs `promtool check rules` and `promtool test rules` on it directly.
+# Annotations are static text on purpose (no {{ $value }}): the unit tests compare them exactly.
+#
+# Metrics only exist after the first event for labelled counters; every expression below is empty (no alert)
+# rather than an error when its series is missing, except the two "missing target" rules which use absent().
+groups:
+  - name: linkforge.slo
+    rules:
+      - alert: LinkForgeRedirectP95High
+        # SLI: server-side latency of GET /{code}. Target < 50 ms; alert at 250 ms (5x worse) for 5 minutes.
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{namespace="linkforge",route="/{code}"}[5m]))
+          ) > 0.25
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Redirect p95 latency above 250 ms for 5 minutes
+
+      - alert: LinkForge5xxRatioHigh
+        # The second condition keeps a single failed request on an idle system from paging anybody.
+        expr: |
+          (
+            sum(rate(http_requests_total{namespace="linkforge",status=~"5.."}[5m]))
+            / sum(rate(http_requests_total{namespace="linkforge"}[5m]))
+            > 0.02
+          )
+          and
+          (sum(rate(http_requests_total{namespace="linkforge"}[5m])) > 0.1)
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: More than 2% of requests fail with 5xx for 5 minutes (request rate above 0.1/s)
+
+  - name: linkforge.clicks
+    rules:
+      - alert: ClickStreamLagHigh
+        # max(): the API and the worker both export the stream gauges.
+        expr: max(click_stream_lag{namespace="linkforge"}) > 5000
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: More than 5000 click events not yet delivered to a worker for 5 minutes
+
+      - alert: ClickStreamPendingHigh
+        expr: max(click_stream_pending{namespace="linkforge"}) > 500
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: More than 500 click events delivered but not acknowledged for 10 minutes
+
+      - alert: ClickStreamLengthHigh
+        # No "for": the stream is capped at CLICK_STREAM_MAXLEN (default 100000); at the cap the OLDEST
+        # clicks are trimmed even if no worker has read them (ARCHITECTURE, click stream notes).
+        expr: max(click_stream_length{namespace="linkforge"}) > 80000
+        labels: {severity: critical}
+        annotations:
+          summary: Click stream above 80000 entries, close to its 100000 cap (old clicks will be trimmed)
+
+      - alert: ClickEventsDropped
+        expr: sum(rate(click_events_dropped_total{namespace="linkforge"}[5m])) > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Click events are being dropped because Redis cannot take them (redirects still work)
+
+  - name: linkforge.platform
+    rules:
+      - alert: RedisMemoryHigh
+        # cAdvisor working set of the container, NOT Redis used_memory (no exporter in P8, D79).
+        # 214958080 bytes = 205 MiB = 80% of maxmemory (256 MB). Redis refuses writes at 256 MB, so the
+        # threshold comes from maxmemory and NOT from the 512 Mi container limit (that would fire too late).
+        expr: container_memory_working_set_bytes{namespace="linkforge",pod=~"redis-.*",container="redis"} > 214958080
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          summary: Redis working set above 205 MiB (80% of maxmemory 256 MB)
+
+      - alert: LinkForgePodCrashLooping
+        expr: kube_pod_container_status_waiting_reason{namespace="linkforge",reason="CrashLoopBackOff"} == 1
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: A LinkForge container is in CrashLoopBackOff
+
+      - alert: LinkForgeTargetDown
+        expr: up{namespace="linkforge",job=~"api|worker"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: Prometheus cannot scrape an api or worker pod
+
+      - alert: LinkForgeApiTargetMissing
+        # up==0 cannot fire when the target does not exist at all (ServiceMonitor deleted, Service renamed).
+        expr: absent(up{namespace="linkforge",job="api"})
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: Prometheus has no api target at all
+
+      - alert: LinkForgeWorkerTargetMissing
+        expr: absent(up{namespace="linkforge",job="worker"})
+        for: 5m
+        labels: {severity: critical}
+        annotations:
+          summary: Prometheus has no worker target at all

@@ -77,6 +77,8 @@ monitoring:
     releaseLabel: "" # only for a stack installed with the default selector; empty on kind (D79)
   dashboard:
     enabled: false # the Grafana dashboard ConfigMap (templates/dashboard.yaml); kind switches it on
+  alerts:
+    enabled: false # the PrometheusRule (templates/prometheusrule.yaml, rules in alerts/); needs the CRDs
 
 # Non-secret application settings; become the container environment (backend/app/config.py).
 config:
