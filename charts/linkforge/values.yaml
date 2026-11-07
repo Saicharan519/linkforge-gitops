@@ -12,7 +12,7 @@ api:
   replicas: 2
   resources: # budget: docs/ARCHITECTURE.md §9.3
     requests: {cpu: 100m, memory: 256Mi}
-    limits: {cpu: 500m, memory: 400Mi}
+    limits: {cpu: 500m, memory: 384Mi}
   # HorizontalPodAutoscaler (templates/hpa.yaml). Infra rule: 70% CPU, min 2, max 6.
   autoscaling:
     enabled: true
