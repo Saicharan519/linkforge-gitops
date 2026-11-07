@@ -1,0 +1,105 @@
+# Values for prometheus-community/kube-prometheus-stack, chart version pinned in argocd/apps/monitoring.yaml.
+# kind only (P8). The machine has 7.6 GiB of RAM shared with the rest of the cluster, so every component has
+# explicit requests/limits and retention is short.
+#
+# Image digests are NOT pinned by the chart version: the chart pins image TAGS, a tag can be re-pointed. The
+# deployed images are scanned with Trivy after each chart bump (see docs/RUNBOOK-monitoring.md).
+
+# Short, stable object names: monitoring-prometheus, monitoring-grafana, monitoring-alertmanager, ...
+fullnameOverride: monitoring
+
+# --- control-plane components that a kind cluster does not expose to Prometheus -------------------------------
+# (kind runs them as static pods bound to localhost; scraping them only produces permanent TargetDown noise).
+kubeEtcd:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+# Matching default alert rules would otherwise fire on the missing targets.
+defaultRules:
+  rules:
+    etcd: false
+    kubeSchedulerAlerting: false
+    kubeSchedulerRecording: false
+    kubeControllerManager: false
+    kubeProxy: false
+
+prometheusOperator:
+  # No admission webhook: it needs a pre-install patch Job (an Argo CD hook, which can deadlock with a stuck
+  # sync, see RUNBOOK-argocd.md). Our PrometheusRules are validated with promtool in P8.3 instead.
+  admissionWebhooks:
+    enabled: false
+  tls:
+    enabled: false
+  resources:
+    requests: {cpu: 20m, memory: 64Mi}
+    limits: {memory: 192Mi}
+
+prometheus:
+  prometheusSpec:
+    # Pick up ServiceMonitors / PodMonitors / PrometheusRules / Probes from ANY namespace and without a
+    # `release: <name>` label (the default selector demands the Helm release label).
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    scrapeConfigSelectorNilUsesHelmValues: false
+    retention: 2d
+    retentionSize: 2GB # the size cap; Prometheus deletes the oldest blocks when it is reached
+    # no PersistentVolume on kind: the TSDB lives in an emptyDir and is lost when the pod is rescheduled
+    resources:
+      requests: {cpu: 100m, memory: 400Mi}
+      limits: {memory: 900Mi}
+
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests: {cpu: 10m, memory: 32Mi}
+      limits: {memory: 96Mi}
+  # Default config of the chart (everything goes to the "null" receiver). NO Slack receiver yet: there is no
+  # workspace (decision D79). Alerts are checked in the Prometheus, Alertmanager and Grafana UIs.
+
+grafana:
+  # Admin password: SealedSecret `grafana-admin` (platform/monitoring/extras/), generated in a pipe.
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # Reached only through `kubectl port-forward` (no Ingress). Anonymous READ-ONLY access is on so that a
+  # browser session can look at the dashboards without anybody handling the admin password; safe because the
+  # service is not exposed outside the cluster. Editing and every admin page still require the admin login.
+  grafana.ini:
+    auth.anonymous:
+      enabled: true
+      org_role: Viewer
+  ingress:
+    enabled: false
+  testFramework:
+    enabled: false
+  resources:
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {memory: 320Mi}
+  sidecar:
+    resources:
+      requests: {cpu: 10m, memory: 48Mi}
+      limits: {memory: 128Mi}
+    dashboards:
+      # picks up every ConfigMap labelled grafana_dashboard=1 from any namespace (the LinkForge dashboard, P8.2)
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+
+kube-state-metrics:
+  resources:
+    requests: {cpu: 10m, memory: 32Mi}
+    limits: {memory: 128Mi}
+
+prometheus-node-exporter:
+  resources:
+    requests: {cpu: 10m, memory: 24Mi}
+    limits: {memory: 64Mi}

@@ -8,9 +8,10 @@
 # Both ports are named `metrics` (API 9101, worker 9100) and belong to cluster-internal Services;
 # no Ingress ever routes them (ARCHITECTURE §1.2).
 #
-# The `release` label: kube-prometheus-stack only picks up ServiceMonitors that carry the label of
-# its own Helm release, unless it is configured otherwise. Set monitoring.serviceMonitor.releaseLabel
-# to that release name (P8 decides it).
+# The `release` label: by default kube-prometheus-stack only picks up ServiceMonitors that carry the
+# label of its own Helm release. Our platform/monitoring/values.yaml turns that selector off
+# (serviceMonitorSelectorNilUsesHelmValues=false), so releaseLabel stays empty on kind; set it only
+# for a stack installed with the default selector.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:

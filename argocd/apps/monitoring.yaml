@@ -1,0 +1,50 @@
+# Child Application, wave -2: Prometheus, Alertmanager, Grafana, kube-state-metrics, node-exporter and the
+# Prometheus Operator CRDs (kube-prometheus-stack). It sits between sealed-secrets (-3) and linkforge (0): the
+# linkforge chart contains ServiceMonitor objects, which only exist once this stack has installed their CRD.
+#
+# THREE sources (multi-source Application):
+#   1. the official prometheus-community chart, an EXACT version (never a range);
+#   2. this repo, only as "$values": platform/monitoring/values.yaml next to our other config;
+#   3. this repo, platform/monitoring/extras: the SealedSecret with the Grafana admin password.
+#
+# ServerSideApply: the stack's CRDs are larger than the 256 KiB annotation limit of a client-side apply
+# ("metadata.annotations: Too long"); server-side apply does not store that annotation.
+#
+# No `resources-finalizer`, same reason as sealed-secrets: deleting this Application must never cascade into
+# the CRDs (deleting a CRD deletes every ServiceMonitor/PrometheusRule in the cluster).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.22.0 # exact; bump deliberately, then rescan the images (RUNBOOK-monitoring.md)
+      helm:
+        releaseName: monitoring
+        valueFiles:
+          - $values/platform/monitoring/values.yaml
+    - repoURL: https://github.com/Saicharan519/linkforge-gitops.git
+      targetRevision: main
+      ref: values
+    - repoURL: https://github.com/Saicharan519/linkforge-gitops.git
+      targetRevision: main
+      path: platform/monitoring/extras
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: {duration: 10s, factor: 2, maxDuration: 3m}
