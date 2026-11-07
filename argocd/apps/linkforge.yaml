@@ -1,15 +1,16 @@
-# The ONE Argo CD "Application" for the walking skeleton (P1S.5). It tells Argo CD:
+# The `linkforge` Application: the application itself (chart + values from this repo). It is a CHILD of
+# the root Application (argocd/root.yaml), which creates it; on a new cluster you apply only root.yaml.
 #   "make the cluster match what this git repo says, and keep it that way."
-# You apply THIS file by hand once (kubectl apply -f). From then on, every change to the chart or
-# the values in git is deployed by Argo CD itself; nobody runs helm or kubectl for deploys.
-#
-# Later (P7) this becomes a child of an "app of apps" root Application with the other pieces
-# (sealed-secrets, monitoring); ARCHITECTURE §11 describes the order.
+# Sync wave 0: it starts only after the wave -3 Application (sealed-secrets) is Healthy, because the chart
+# contains a SealedSecret that the controller must unseal into the linkforge-db Secret. (Wave -2, the
+# monitoring stack, is added in P8 and will slot in between.)
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: linkforge
   namespace: argocd # Application objects live in Argo CD's own namespace
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
   finalizers:
     # Deleting this Application also deletes the objects it deployed (cascade). Without the
     # finalizer they would be orphaned and keep running. (The database volume and the hand-made
@@ -30,12 +31,17 @@ spec:
         - ../../envs/kind/values.yaml
 
   # WHERE to deploy it: this very cluster (the API server Argo runs inside), namespace "linkforge".
-  # That namespace and the linkforge-db Secret already exist (created by hand, docs/RUNBOOK-k8s-raw.md §2).
+  # The namespace is created by the sync (CreateNamespace below); the linkforge-db Secret comes from the
+  # SealedSecret in this chart (templates/sealedsecret.yaml, once enabled), or was made by hand before that.
   destination:
     server: https://kubernetes.default.svc
     namespace: linkforge
 
   syncPolicy:
+    syncOptions:
+      # Create the `linkforge` namespace if it does not exist (a fresh cluster has none; before P7D
+      # it was made by hand). Already existing namespaces are left alone.
+      - CreateNamespace=true
     automated:
       # prune: something REMOVED from git is also removed from the cluster.
       prune: true

@@ -1,0 +1,32 @@
+# The ROOT Application ("app of apps", ARCHITECTURE §11). It is the ONLY thing applied by hand on a
+# new cluster:   kubectl apply -f argocd/root.yaml
+# Its job is to create the other Applications found in argocd/apps/, in the order given by their
+# `argocd.argoproj.io/sync-wave` annotation (lowest first):
+#   wave -3  sealed-secrets   the controller that turns SealedSecret objects into Secrets
+#   wave  0  linkforge        the application itself
+# (wave -2, the monitoring stack, is added in P8).
+# Argo CD waits for each wave's Applications to be Healthy before it starts the next one.
+#
+# There is deliberately NO `resources-finalizer` on this Application: deleting `root` would otherwise
+# cascade and delete every child Application and, through them, the whole stack. Without it, removing
+# the root only stops the automation and leaves everything running.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Saicharan519/linkforge-gitops.git
+    targetRevision: main
+    path: argocd/apps
+    directory:
+      recurse: false # only the files directly in argocd/apps/, each one an Application
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd # Application objects live in Argo CD's own namespace
+  syncPolicy:
+    automated:
+      prune: true # an Application file deleted from git is removed from the cluster
+      selfHeal: true
