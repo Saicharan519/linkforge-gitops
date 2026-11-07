@@ -29,10 +29,6 @@ config:
   TRUSTED_PROXY_COUNT: "1" # exactly one proxy in front of the API: Traefik
   ALLOWED_ORIGINS: http://app.localtest.me # the page that will call the API (the app host)
   COOKIE_SECURE: "false" # kind is plain HTTP; a Secure cookie would never be sent back
-  # LOAD TEST ONLY (P8.4): the app has its own limiter and k6 is one client IP. REVERTED by a second commit right after
-  # the run; the defaults are 120 redirects/min per IP and 30 creates/min per user.
-  RATE_LIMIT_REDIRECT_PER_MIN: "1000000"
-  RATE_LIMIT_CREATE_PER_MIN: "100000"
 
 ingress:
   className: traefik
