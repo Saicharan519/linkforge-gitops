@@ -52,8 +52,9 @@ migrate:
 # PostgreSQL inside the cluster. true on kind; false on EKS, where RDS is used instead.
 postgres:
   enabled: true
-  # Tag AND digest, like our Dockerfiles. Same version as docker-compose.yml.
-  image: postgres:16.4@sha256:e62fbf9d3e2b49816a32c400ed2dba83e3b361e6833e624024309c35d334b412
+  # Tag AND digest, like our Dockerfiles. Same version as docker-compose.yml and the CI service container.
+  # 16.4 -> 16.15 (P8b finding: 166 HIGH/CRITICAL with fixes in 16.4, 26 in 16.15, all in the bundled gosu binary).
+  image: postgres:16.15@sha256:f9a7b9ebf6f56201f949db745e47bc423c0f0f8294bafe991cc10bf74b029657
   storage: 1Gi
   resources:
     requests: {cpu: 100m, memory: 256Mi}
