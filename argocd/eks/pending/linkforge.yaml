@@ -1,0 +1,41 @@
+# The `linkforge` Application for EKS, wave 0. It lives in `pending/` and NOT in `apps/` on purpose: the root watches only
+# `apps/`, so this Application does not exist until `scripts/eks-seal-and-enable.sh` (P9.3) has
+#   1. sealed DATABASE_URL and IP_HASH_SECRET against THIS cluster's Sealed Secrets key (envs/eks/sealed.values.yaml), and
+#   2. moved this file to `apps/` (git mv) in the same commit.
+# Without that order the migration Job would start before the Secret exists and hang (the failure mode that the hook
+# finalizer drill of P7D exposed).
+#
+# Cascade finalizer kept: deleting this Application removes everything it deployed, including the two Ingresses, which is
+# what makes the load balancer controller delete the ALBs (the destroy order depends on it). The Redis volume claim is NOT
+# removed by it (StatefulSet claims are not tracked): envs/eks/README.md deletes it explicitly.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: linkforge
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Saicharan519/linkforge-gitops.git
+    targetRevision: main
+    path: charts/linkforge
+    helm:
+      valueFiles:
+        - ../../envs/eks/values.yaml
+        - ../../envs/eks/sealed.values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: linkforge
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: {duration: 10s, factor: 2, maxDuration: 3m}

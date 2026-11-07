@@ -1,0 +1,21 @@
+# EKS overrides on top of platform/monitoring/values.yaml (the kind file). Only what differs.
+#
+# Lean: fewer pods (the per-node pod limit is the tight resource on EKS, see envs/eks/README.md) and less memory.
+# Alertmanager and node-exporter are off; Prometheus keeps one day.
+
+alertmanager:
+  enabled: false
+
+nodeExporter:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 1d
+    retentionSize: 1GB
+
+grafana:
+  # The kind file points at a SealedSecret that is sealed for kind's controller key; it cannot be decrypted on EKS.
+  # Empty here = the chart creates its own admin Secret with a generated password.
+  admin:
+    existingSecret: ""

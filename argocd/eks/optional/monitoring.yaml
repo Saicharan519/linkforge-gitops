@@ -1,0 +1,44 @@
+# OPTIONAL on EKS: the lean monitoring stack (Prometheus, Grafana, kube-state-metrics, operator; no Alertmanager, no
+# node-exporter). OFF by default: it adds pods (the per-node pod limit is the tight resource) and a failure here must not
+# hide a problem with the application. To turn it on, in ONE commit:
+#   git mv argocd/eks/optional/monitoring.yaml argocd/eks/apps/monitoring.yaml
+#   and set monitoring.serviceMonitor / dashboard / alerts to true in envs/eks/values.yaml
+# (the CRDs exist only after this Application has synced; wave -2 makes linkforge wait for it, like on kind).
+#
+# Values: the kind file (platform/monitoring/values.yaml) plus platform/monitoring/values-eks.yaml, which only trims and
+# removes the Grafana password Secret (it is sealed for kind's key and cannot be read here; Grafana then generates
+# its own admin password, readable by the owner with kubectl). Same chart version as kind.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 92.22.0
+      helm:
+        releaseName: monitoring
+        valueFiles:
+          - $values/platform/monitoring/values.yaml
+          - $values/platform/monitoring/values-eks.yaml
+    - repoURL: https://github.com/Saicharan519/linkforge-gitops.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: {duration: 10s, factor: 2, maxDuration: 3m}

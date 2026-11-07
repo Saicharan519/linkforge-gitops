@@ -66,6 +66,7 @@ redis:
   # Tag AND digest, like our Dockerfiles. Same major version as docker-compose.yml.
   image: redis:7.4@sha256:2e3eb11462c4e3759e6972678dd051d150ff54b1e60714b3c33b701260172a90
   storage: 1Gi
+  storageClassName: "" # empty = the cluster default; EKS: "gp3" (platform/eks/storage)
   resources: # ARCHITECTURE §9.3 / §5.1: the memory limit must exceed maxmemory (256mb) with room
     requests: {cpu: 100m, memory: 256Mi} # for the copy-on-write fork of an AOF rewrite (D11)
     limits: {cpu: 500m, memory: 512Mi}
@@ -101,6 +102,13 @@ config:
   # Load-test overrides of the app's rate limits; empty = keep the backend defaults (120/min per IP, 30/min per user).
   RATE_LIMIT_REDIRECT_PER_MIN: ""
   RATE_LIMIT_CREATE_PER_MIN: ""
+  # The host the API treats as the public short-link host (D63): on it ONLY GET/HEAD /{code} is served. Empty =
+  # use ingress.goHost. Set it when there is no host rule (EKS HTTP mode): then it is the DNS name of the go ALB.
+  PUBLIC_REDIRECT_HOST: ""
+  # TLS to the database (D14, D85). Empty = not rendered = the backend default (disable). EKS: verify-full with the
+  # RDS CA bundle that is baked into the image.
+  DATABASE_SSL_MODE: ""
+  DATABASE_SSL_CA_FILE: ""
 
 # The Secret holding DATABASE_URL (and POSTGRES_PASSWORD when postgres.enabled). The chart does
 # NOT create it: kind = created by hand (docs/RUNBOOK-k8s-raw.md §2), later a SealedSecret.
@@ -115,6 +123,11 @@ secrets:
 
 ingress:
   className: "" # REQUIRED: "traefik" on kind, "alb" on EKS
-  appHost: "" # REQUIRED: web app + /api
-  goHost: "" # REQUIRED: public short-link host
-  annotations: {}
+  # true (kind, EKS with a real domain): the rules match on appHost / goHost. false (EKS in HTTP mode, no domain):
+  # the rules carry no host, each Ingress is its own ALB (templates/ingress.yaml).
+  hostRules: true
+  appHost: "" # web app + /api; REQUIRED when hostRules is true
+  goHost: "" # public short-link host; REQUIRED when hostRules is true (and the default of config.PUBLIC_REDIRECT_HOST)
+  annotations: {} # on BOTH Ingresses
+  appAnnotations: {} # only on the app Ingress (win over `annotations`)
+  goAnnotations: {} # only on the go Ingress

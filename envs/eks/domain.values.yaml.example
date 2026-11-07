@@ -1,0 +1,23 @@
+# EXAMPLE overlay for DOMAIN MODE (HTTPS on your own domain). Not used unless the linkforge Application lists it AFTER
+# envs/eks/values.yaml in `valueFiles`. Copy it to envs/eks/domain.values.yaml, fill in the <...> parts, add it to
+# argocd/eks/apps/linkforge.yaml:
+#     valueFiles: [../../envs/eks/values.yaml, ../../envs/eks/domain.values.yaml, ../../envs/eks/sealed.values.yaml]
+#
+# Prerequisites: a domain whose Route53 hosted zone exists in the account; `terraform apply` in infra/terraform/cloud with
+# domain_name set (the ACM certificate is validated through that zone); after the ALBs exist, a second apply with
+# alb_dns_names to create the alias records.
+config:
+  SHORT_URL_BASE: https://go.<domain>
+  PUBLIC_REDIRECT_HOST: go.<domain>
+  ALLOWED_ORIGINS: https://app.<domain>
+  COOKIE_SECURE: "true" # HTTPS: Secure cookies work (and are sent only over TLS)
+
+ingress:
+  hostRules: true
+  appHost: app.<domain>
+  goHost: go.<domain>
+  annotations:
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # terraform output acm_certificate_arn
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-southeast-2:<account>:certificate/<id>

@@ -1,5 +1,15 @@
-# Two hosts, two Ingresses (ARCHITECTURE §1). The class comes from values: "traefik" on kind,
-# "alb" on EKS; the routing rules themselves are identical.
+# Two Ingresses (ARCHITECTURE §1): the web app (host "app") and the public short links (host "go"). The class comes
+# from values: "traefik" on kind, "alb" on EKS; the routing rules themselves are identical.
+#
+# Host rules are optional (`ingress.hostRules`, default true). On EKS in HTTP mode there is no domain: each Ingress
+# becomes its OWN ALB with its own AWS-generated DNS name, so there is nothing to tell the two apart by and the
+# rules carry no host. (The short-link host guard in the API does not depend on this: it compares the Host header
+# with PUBLIC_REDIRECT_HOST from the ConfigMap, see configmap.yaml.)
+#
+# Annotations: `ingress.annotations` apply to both Ingresses, `ingress.appAnnotations` / `ingress.goAnnotations` to
+# one of them (they win on a clash). The ALB needs a different health-check path per Ingress.
+{{- $appAnnotations := merge (dict) .Values.ingress.appAnnotations .Values.ingress.annotations }}
+{{- $goAnnotations := merge (dict) .Values.ingress.goAnnotations .Values.ingress.annotations }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,14 +19,13 @@ metadata:
     {{- include "linkforge.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
-    {{- with .Values.ingress.annotations }}
+    {{- with $appAnnotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   ingressClassName: {{ required "ingress.className is required (traefik|alb)" .Values.ingress.className }}
   rules:
-    - host: {{ required "ingress.appHost is required" .Values.ingress.appHost }}
-      http:
+    - http:
         paths:
           - path: /api # longest prefix wins, so /api/... reaches the API
             pathType: Prefix
@@ -26,6 +35,9 @@ spec:
             pathType: Prefix
             backend:
               service: {name: frontend, port: {name: http}}
+      {{- if .Values.ingress.hostRules }}
+      host: {{ required "ingress.appHost is required when ingress.hostRules is true" .Values.ingress.appHost }}
+      {{- end }}
 ---
 # The PUBLIC short-link host: only the API's http port is ever behind it (a metrics port, named
 # "metrics", must never appear in an Ingress).
@@ -41,16 +53,18 @@ metadata:
     {{- include "linkforge.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"
-    {{- with .Values.ingress.annotations }}
+    {{- with $goAnnotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - host: {{ required "ingress.goHost is required" .Values.ingress.goHost }}
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service: {name: api, port: {name: http}}
+      {{- if .Values.ingress.hostRules }}
+      host: {{ required "ingress.goHost is required when ingress.hostRules is true" .Values.ingress.goHost }}
+      {{- end }}

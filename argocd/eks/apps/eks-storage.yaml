@@ -1,0 +1,22 @@
+# EKS, wave -3: the gp3 StorageClass that Redis' PersistentVolumeClaim uses (platform/eks/storage). The EBS CSI driver
+# itself is an EKS add-on installed by Terraform (infra/terraform/cloud/eks.tf).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: eks-storage
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Saicharan519/linkforge-gitops.git
+    targetRevision: main
+    path: platform/eks/storage
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -1,0 +1,83 @@
+# Values for the EKS cluster (P9.2), layered on top of charts/linkforge/values.yaml. Never shared with kind (D6).
+# Everything that differs from the defaults, or must be decided per environment, is stated here.
+#
+# HTTP MODE (no domain; the default). Each of the two Ingresses becomes its OWN ALB with an AWS-generated DNS name
+# (k8s-...elb.ap-southeast-2.amazonaws.com), and there is NO TLS: passwords and session cookies travel in clear
+# text. Use test accounts only. Domain mode (a real domain + ACM) is described in envs/eks/README.md.
+#
+# The two DNS names do not exist until the ALBs are created, so the hosts below are PLACEHOLDERS in phase 1 and are
+# replaced in phase 2 (scripts/eks-set-hosts.sh). While `pending.invalid` is the redirect host, the host guard is ON
+# and the go ALB answers 404 to everything: nothing is exposed by accident.
+#
+# Image tags are set by hand (CI only bumps envs/kind): they must contain the database TLS code (P9.0).
+
+api:
+  image:
+    repository: ghcr.io/saicharan519/linkforge-api
+    tag: "sha-32c77ee"
+frontend:
+  image:
+    repository: ghcr.io/saicharan519/linkforge-frontend
+    tag: "sha-32c77ee"
+worker:
+  image:
+    repository: ghcr.io/saicharan519/linkforge-api
+    tag: "sha-32c77ee"
+
+# RDS replaces the in-cluster PostgreSQL (P9.1, modules/rds).
+postgres:
+  enabled: false
+
+# Redis stays in the cluster, with its AOF on an EBS gp3 volume (EBS CSI driver + the gp3 StorageClass of
+# platform/eks/storage). The volume is deleted with the claim: destroy order matters (envs/eks/README.md).
+redis:
+  storageClassName: gp3
+
+config:
+  ENV: prod
+  # PHASE 1 placeholders; phase 2 writes the real ALB names here (scripts/eks-set-hosts.sh).
+  SHORT_URL_BASE: http://pending.invalid
+  PUBLIC_REDIRECT_HOST: pending.invalid
+  ALLOWED_ORIGINS: http://pending.invalid
+  TRUSTED_PROXY_COUNT: "1" # exactly one proxy in front of the API: the ALB
+  COOKIE_SECURE: "false" # HTTP mode: a Secure cookie would never be sent back. Domain mode sets "true".
+  # TLS to RDS: verify the certificate against the RDS bundle baked into the image, and check the host name (D14, D85).
+  DATABASE_SSL_MODE: verify-full
+  DATABASE_SSL_CA_FILE: /etc/ssl/rds/global-bundle.pem
+
+ingress:
+  className: alb
+  hostRules: false # no domain: no host in the rules, each Ingress is its own ALB
+  annotations:
+    # internet-facing: the controller's default is an INTERNAL load balancer.
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    # Send traffic straight to the pod IPs (VPC CNI gives every pod a VPC address), not through a NodePort.
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    # WHO may reach the ALBs. REPLACE the placeholder with your IP as a /32 (or 0.0.0.0/0 on purpose, knowing there
+    # is no TLS). The placeholder is not a valid CIDR on purpose; the enable script refuses to run while it is still
+    # here (the controller should also report an error for an invalid CIDR, but that is not relied on).
+    alb.ingress.kubernetes.io/inbound-cidrs: REPLACE_WITH_YOUR_IP/32
+  appAnnotations:
+    # The app Ingress targets the nginx frontend, which answers 200 on /.
+    alb.ingress.kubernetes.io/healthcheck-path: /
+  goAnnotations:
+    # The go Ingress targets the API, whose liveness endpoint is /healthz.
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+
+# The sealed secrets (DATABASE_URL, IP_HASH_SECRET) are in envs/eks/sealed.values.yaml, written by
+# scripts/eks-seal-and-enable.sh against THIS cluster's controller key. Their presence is what lets the linkforge
+# Application be enabled (argocd/eks/pending -> apps).
+secrets:
+  sealed:
+    enabled: true
+
+# No Prometheus Operator CRDs unless the optional monitoring Application is enabled (then switch these on in the
+# same commit, like on kind).
+monitoring:
+  serviceMonitor:
+    enabled: false
+  dashboard:
+    enabled: false
+  alerts:
+    enabled: false

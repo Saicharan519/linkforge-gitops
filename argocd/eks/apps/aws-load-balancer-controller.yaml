@@ -1,0 +1,73 @@
+# EKS, wave -3: the AWS Load Balancer Controller. It turns our two Ingresses (class alb) into two ALBs. It must be Healthy
+# BEFORE the linkforge Application (wave 0) creates them.
+#
+# Chart 3.6.2 = controller v3.6.2 = the IAM policy vendored in infra/terraform/cloud/policies (keep all three in step).
+# It gets its AWS permissions through EKS Pod Identity: Terraform associated the role with service account
+# `aws-load-balancer-controller` in `kube-system` (iam.tf), so the account name below must not change. The cluster name
+# must equal `var.name` of the Terraform stack ("linkforge").
+#
+# region and vpcId are not set: the controller finds them in the instance metadata (the node group allows pods to read
+# it, hop limit 2, eks.tf). If it crash-loops with a message about the region or VPC, set `region` and `vpcId` here.
+#
+# The chart makes a NEW random webhook certificate on every render, so Argo CD would see a permanent difference in the
+# TLS Secret and in the webhook caBundle fields. They are ignored (with RespectIgnoreDifferences, the live values are
+# kept): the certificate created on the first sync stays in use.
+#
+# No finalizer: the CRDs of this chart (TargetGroupBinding, IngressClassParams, ...) must not be deleted by a cascade.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aws-load-balancer-controller
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+spec:
+  project: default
+  source:
+    repoURL: https://aws.github.io/eks-charts
+    chart: aws-load-balancer-controller
+    targetRevision: 3.6.2
+    helm:
+      releaseName: aws-load-balancer-controller
+      valuesObject:
+        clusterName: linkforge
+        replicaCount: 1 # one is enough for a demo and saves a pod slot (the default is 2)
+        serviceAccount:
+          create: true
+          name: aws-load-balancer-controller
+        defaultTargetType: ip
+        # We create no Services of type LoadBalancer; without this webhook, a controller outage cannot block Service
+        # creation in the cluster.
+        enableServiceMutatorWebhook: false
+        resources:
+          requests: {cpu: 25m, memory: 64Mi}
+          limits: {memory: 192Mi}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: aws-load-balancer-tls
+      jsonPointers:
+        - /data
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      name: aws-load-balancer-webhook
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: aws-load-balancer-webhook
+      jqPathExpressions:
+        - .webhooks[].clientConfig.caBundle
+  syncPolicy:
+    syncOptions:
+      - ServerSideApply=true
+      - RespectIgnoreDifferences=true
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff: {duration: 10s, factor: 2, maxDuration: 3m}

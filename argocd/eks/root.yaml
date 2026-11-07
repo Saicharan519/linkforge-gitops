@@ -1,0 +1,26 @@
+# The EKS root Application (app of apps): the ONE thing applied by hand on a new EKS cluster (scripts/bootstrap-eks.sh,
+# P9.3). It watches argocd/eks/apps and creates every Application found there, in sync-wave order. (kind has its own
+# root, argocd/root.yaml, watching argocd/apps: the two clusters never share Application files, D6.)
+#
+# No `resources-finalizer`, like the kind root: deleting it must not cascade by accident. The planned teardown is done
+# explicitly (envs/eks/README.md).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Saicharan519/linkforge-gitops.git
+    targetRevision: main
+    path: argocd/eks/apps
+    directory:
+      recurse: false
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -25,7 +25,14 @@ data:
   COOKIE_SECURE: {{ .Values.config.COOKIE_SECURE | quote }}
   # The public short-link host: on it the API serves ONLY GET/HEAD /{code}, everything else is 404
   # (host guard, D63). One source of truth: it is the same host the "go" Ingress routes.
-  PUBLIC_REDIRECT_HOST: {{ required "ingress.goHost is required" .Values.ingress.goHost | quote }}
+  PUBLIC_REDIRECT_HOST: {{ required "config.PUBLIC_REDIRECT_HOST or ingress.goHost is required" (coalesce .Values.config.PUBLIC_REDIRECT_HOST .Values.ingress.goHost) | quote }}
+  {{- /* TLS to the database (optional; empty = not rendered = the backend default, plain TCP). EKS: verify-full + the RDS bundle. A template comment, so the rendered ConfigMap (and its checksum, which rolls the pods) is unchanged on kind. */}}
+  {{- with .Values.config.DATABASE_SSL_MODE }}
+  DATABASE_SSL_MODE: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.config.DATABASE_SSL_CA_FILE }}
+  DATABASE_SSL_CA_FILE: {{ . | quote }}
+  {{- end }}
   # Optional overrides of the app's rate limits (backend defaults: 120 redirects/min per IP, 30 creates/min per
   # user). Only a load test sets them (P8.4); empty = not rendered = the backend default applies.
   {{- with .Values.config.RATE_LIMIT_REDIRECT_PER_MIN }}

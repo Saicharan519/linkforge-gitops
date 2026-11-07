@@ -1,0 +1,20 @@
+# The StorageClass for Redis' PersistentVolumeClaim on EKS (EBS CSI driver add-on, P9.1).
+#
+# - provisioner ebs.csi.aws.com: the CSI driver (the old in-tree "kubernetes.io/aws-ebs" class that EKS used to ship
+#   is not usable any more).
+# - gp3: cheaper and faster than gp2 at the same size. Encrypted with the account's default EBS key.
+# - WaitForFirstConsumer: the volume is created in the availability zone where the pod is SCHEDULED (an EBS volume
+#   lives in one zone; creating it first could put it where no node can use it).
+# - reclaimPolicy Delete: deleting the claim deletes the volume. That is what we want for a disposable demo (no
+#   orphaned billable volume after the destroy); a production database would use Retain.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
+allowVolumeExpansion: true
