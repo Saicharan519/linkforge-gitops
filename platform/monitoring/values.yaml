@@ -21,6 +21,12 @@ kubeProxy:
 
 # Matching default alert rules would otherwise fire on the missing targets.
 defaultRules:
+  # AlertmanagerClusterCrashlooping fired permanently on this WSL2 machine although the pod never restarted
+  # (0 restarts, 45 min old): `changes(process_start_time_seconds)` counted 19-20 changes in 10 minutes. Probable cause: the
+  # start time is derived from the boot time, which jitters under WSL2 (NOT proven). A permanently firing critical alert
+  # hides real ones, so this one rule is disabled; the pod restart count is still on the dashboard.
+  disabled:
+    AlertmanagerClusterCrashlooping: true
   rules:
     etcd: false
     kubeSchedulerAlerting: false
