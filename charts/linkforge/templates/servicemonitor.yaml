@@ -1,0 +1,55 @@
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+# ServiceMonitors tell Prometheus (installed in P8 with kube-prometheus-stack) WHICH Services to
+# scrape. A ServiceMonitor is a custom resource: its definition (CRD) exists only after that stack
+# is installed, so this file renders nothing until `monitoring.serviceMonitor.enabled` is switched
+# on, in the same change that installs the stack. Rendering it earlier would make Argo CD fail with
+# "no matches for kind ServiceMonitor".
+#
+# Both ports are named `metrics` (API 9101, worker 9100) and belong to cluster-internal Services;
+# no Ingress ever routes them (ARCHITECTURE §1.2).
+#
+# The `release` label: kube-prometheus-stack only picks up ServiceMonitors that carry the label of
+# its own Helm release, unless it is configured otherwise. Set monitoring.serviceMonitor.releaseLabel
+# to that release name (P8 decides it).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.releaseLabel }}
+    release: {{ . }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace }}]
+  selector:
+    matchLabels:
+      app: api
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+{{- if .Values.worker.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.releaseLabel }}
+    release: {{ . }}
+    {{- end }}
+spec:
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace }}]
+  selector:
+    matchLabels:
+      app: worker
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+{{- end }}
+{{- end }}

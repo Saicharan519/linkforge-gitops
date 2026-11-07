@@ -8,7 +8,11 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1" # after the migration (wave 0) has succeeded
 spec:
+  {{- if not .Values.api.autoscaling.enabled }}
+  # With the HPA on (templates/hpa.yaml) the HPA owns the replica count: setting it here too would make
+  # Argo CD's self-heal and the HPA undo each other forever.
   replicas: {{ .Values.api.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       app: api
@@ -72,6 +76,7 @@ metadata:
   name: api
   namespace: {{ .Release.Namespace }}
   labels:
+    app: api # lets a ServiceMonitor select this Service (templates/servicemonitor.yaml)
     {{- include "linkforge.labels" . | nindent 4 }}
   annotations:
     argocd.argoproj.io/sync-wave: "1"

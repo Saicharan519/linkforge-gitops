@@ -1,0 +1,41 @@
+{{- if .Values.api.autoscaling.enabled }}
+# HorizontalPodAutoscaler: Kubernetes adds API pods when they are busy and removes them when they
+# are not (P7B.2). Every 15 seconds the HPA asks metrics-server for the pods' CPU use, compares the
+# average with the target, and changes the Deployment's replica count.
+#
+# The target is a percentage of each pod's CPU REQUEST (api.resources.requests.cpu, 100m), not of the
+# limit and not of the node: 70% means "average use above 70 millicores per pod -> add pods". This is
+# why every container must have a request (infra rule): without one the HPA cannot compute a percentage.
+#
+# While this object exists it OWNS the replica count, so api.yaml leaves `replicas` out. If both
+# wrote it, Argo CD's self-heal and the HPA would keep undoing each other.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1" # with the Deployment it scales
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api
+  minReplicas: {{ .Values.api.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.api.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.api.autoscaling.targetCPUUtilizationPercentage }}
+  behavior:
+    scaleDown:
+      # Wait 5 minutes of consistently low load before removing a pod. Scaling down fast and up
+      # again a minute later ("flapping") is worse than carrying one spare pod for a few minutes.
+      # (300 s is also Kubernetes' default; stated so nobody has to look it up.)
+      stabilizationWindowSeconds: 300
+{{- end }}

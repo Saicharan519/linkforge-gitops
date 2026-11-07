@@ -1,0 +1,23 @@
+{{- if .Values.api.pdb.enabled }}
+# PodDisruptionBudget: a promise about VOLUNTARY disruptions (a node drain for an upgrade, a
+# cluster autoscaler removing a node). Kubernetes will not evict an API pod if that would leave fewer
+# than `minAvailable` pods running, so maintenance can never take every API pod away at once.
+# It does NOT protect against crashes or a node dying (nothing can); that is what the 2+ replicas
+# and the readiness probe are for.
+#
+# minAvailable: 1 with at least 2 replicas (the HPA minimum) means "drain one pod at a time".
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "linkforge.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  minAvailable: {{ .Values.api.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      app: api
+{{- end }}

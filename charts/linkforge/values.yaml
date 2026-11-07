@@ -8,10 +8,21 @@ api:
     repository: ghcr.io/saicharan519/linkforge-api
     tag: "" # REQUIRED. CI writes it into the env file (marker comment "ci:api-tag")
     pullPolicy: IfNotPresent # tags are commit SHAs and never re-used, so a cached image is correct
+  # Fixed replica count. Used ONLY when autoscaling is off: with the HPA on, the HPA owns the count.
   replicas: 2
   resources: # budget: docs/ARCHITECTURE.md §9.3
     requests: {cpu: 100m, memory: 256Mi}
     limits: {cpu: 500m, memory: 384Mi}
+  # HorizontalPodAutoscaler (templates/hpa.yaml). Infra rule: 70% CPU, min 2, max 6.
+  autoscaling:
+    enabled: true
+    minReplicas: 2 # never below 2: one pod can be restarted without an outage
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70 # % of the CPU request (100m), see hpa.yaml
+  # PodDisruptionBudget (templates/pdb.yaml): voluntary evictions may never leave fewer than this.
+  pdb:
+    enabled: true
+    minAvailable: 1
 
 # The click worker: same image as the API (it follows api.image.tag), different command.
 worker:
@@ -56,6 +67,14 @@ redis:
   resources: # ARCHITECTURE §9.3 / §5.1: the memory limit must exceed maxmemory (256mb) with room
     requests: {cpu: 100m, memory: 256Mi} # for the copy-on-write fork of an AOF rewrite (D11)
     limits: {cpu: 500m, memory: 512Mi}
+
+# Prometheus integration. OFF until P8 installs kube-prometheus-stack (the ServiceMonitor kind does
+# not exist before that); switch it on in the same change.
+monitoring:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    releaseLabel: "" # the kube-prometheus-stack release name, if its selector needs it (decided in P8)
 
 # Non-secret application settings; become the container environment (backend/app/config.py).
 config:
