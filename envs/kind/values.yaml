@@ -8,11 +8,11 @@
 api:
   image:
     repository: ghcr.io/saicharan519/linkforge-api
-    tag: "sha-2021116" # ci:api-tag
+    tag: "sha-212220b" # ci:api-tag
 frontend:
   image:
     repository: ghcr.io/saicharan519/linkforge-frontend
-    tag: "sha-2021116" # ci:frontend-tag
+    tag: "sha-212220b" # ci:frontend-tag
 
 # The click worker. OFF until the image that contains it is deployed: the P2 image has no
 # `app.worker` module, so a worker started from it would crash-loop. The runbook flips this to
