@@ -18,7 +18,6 @@ frontend:
 # `app.worker` module, so a worker started from it would crash-loop. The runbook flips this to
 # true (a one-line commit) after the new image is running.
 worker:
-  replicas: 0 # DRILL (P8.5): worker down; REVERT after the drill
   enabled: true
 
 postgres:
