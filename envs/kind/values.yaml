@@ -29,9 +29,6 @@ config:
   TRUSTED_PROXY_COUNT: "1" # exactly one proxy in front of the API: Traefik
   ALLOWED_ORIGINS: http://app.localtest.me # the page that will call the API (the app host)
   COOKIE_SECURE: "false" # kind is plain HTTP; a Secure cookie would never be sent back
-  # DRILLS ONLY (P8.5): limits raised so k6 and the probes are not rate limited. REVERTED when the drills end.
-  RATE_LIMIT_REDIRECT_PER_MIN: "1000000"
-  RATE_LIMIT_CREATE_PER_MIN: "100000"
 
 ingress:
   className: traefik
