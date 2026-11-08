@@ -20,6 +20,7 @@ frontend:
     repository: ghcr.io/saicharan519/linkforge-frontend
     tag: "sha-32c77ee"
 worker:
+  replicas: 0
   image:
     repository: ghcr.io/saicharan519/linkforge-api
     tag: "sha-32c77ee"
