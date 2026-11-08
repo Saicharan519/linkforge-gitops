@@ -36,9 +36,9 @@ redis:
 config:
   ENV: prod
   # PHASE 1 placeholders; phase 2 writes the real ALB names here (scripts/eks-set-hosts.sh).
-  SHORT_URL_BASE: http://pending.invalid
-  PUBLIC_REDIRECT_HOST: pending.invalid
-  ALLOWED_ORIGINS: http://pending.invalid
+  SHORT_URL_BASE: http://k8s-linkforg-go-b836281b02-1509626518.ap-southeast-2.elb.amazonaws.com
+  PUBLIC_REDIRECT_HOST: k8s-linkforg-go-b836281b02-1509626518.ap-southeast-2.elb.amazonaws.com
+  ALLOWED_ORIGINS: http://k8s-linkforg-app-38609ab5ab-779724471.ap-southeast-2.elb.amazonaws.com
   TRUSTED_PROXY_COUNT: "1" # exactly one proxy in front of the API: the ALB
   COOKIE_SECURE: "false" # HTTP mode: a Secure cookie would never be sent back. Domain mode sets "true".
   # TLS to RDS: verify the certificate against the RDS bundle baked into the image, and check the host name (D14, D85).
