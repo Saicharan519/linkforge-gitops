@@ -13,6 +13,15 @@
 # TLS Secret and in the webhook caBundle fields. They are ignored (with RespectIgnoreDifferences, the live values are
 # kept): the certificate created on the first sync stays in use.
 #
+# KNOWN FLAW (first real run, D90): "the first sync" can be applied in more than one attempt, and each attempt renders a
+# different random CA. The Secret and the webhooks' caBundle then keep values from different renders (measured: two different
+# CA hashes), and every Ingress is rejected with "x509: certificate signed by unknown authority". This file cannot fix that
+# (git has no stable certificate to give the chart without committing a private key). The fix is a step of the bootstrap:
+# linkforge/scripts/eks-fix-webhook-ca.sh copies the Secret's ca.crt into every webhook's caBundle (idempotent; called by
+# bootstrap-eks.sh and eks-seal-and-enable.sh). If Ingresses fail with that x509 message, run it by hand.
+# Alternatives considered and not taken: cert-manager (more pods and CRDs), certificates passed through `webhookTLS`
+# (a private key in git).
+#
 # No finalizer: the CRDs of this chart (TargetGroupBinding, IngressClassParams, ...) must not be deleted by a cascade.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
