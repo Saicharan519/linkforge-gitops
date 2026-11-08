@@ -44,6 +44,9 @@ config:
   # TLS to RDS: verify the certificate against the RDS bundle baked into the image, and check the host name (D14, D85).
   DATABASE_SSL_MODE: verify-full
   DATABASE_SSL_CA_FILE: /etc/ssl/rds/global-bundle.pem
+  # TEMPORARY, for the k6 load test only (P10.1): one k6 pod is ONE client IP. Revert with `git revert` of this commit.
+  RATE_LIMIT_REDIRECT_PER_MIN: "1000000"
+  RATE_LIMIT_CREATE_PER_MIN: "1000000"
 
 ingress:
   className: alb
