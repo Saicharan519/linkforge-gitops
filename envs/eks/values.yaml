@@ -57,7 +57,7 @@ ingress:
     # WHO may reach the ALBs. REPLACE the placeholder with your IP as a /32 (or 0.0.0.0/0 on purpose, knowing there
     # is no TLS). The placeholder is not a valid CIDR on purpose; the enable script refuses to run while it is still
     # here (the controller should also report an error for an invalid CIDR, but that is not relied on).
-    alb.ingress.kubernetes.io/inbound-cidrs: REPLACE_WITH_YOUR_IP/32
+    alb.ingress.kubernetes.io/inbound-cidrs: 103.55.74.154/32,45.127.199.155/32
   appAnnotations:
     # The app Ingress targets the nginx frontend, which answers 200 on /.
     alb.ingress.kubernetes.io/healthcheck-path: /
