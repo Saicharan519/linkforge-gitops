@@ -18,7 +18,7 @@ api:
 frontend:
   image:
     repository: ghcr.io/saicharan519/linkforge-frontend
-    tag: "sha-32c77ee"
+    tag: "sha-doesnotexist"
 worker:
   image:
     repository: ghcr.io/saicharan519/linkforge-api
